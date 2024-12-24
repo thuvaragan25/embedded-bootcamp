@@ -19,6 +19,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -87,7 +89,23 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_SPI1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
+  uint8_t tx_data[3] = {0b00000001, 0b10000000, 0};
+  uint8_t rx_data[3];
+  uint16_t adc_value;
+
+  const uint16_t timer_count = 10000;
+  const uint16_t max_adc_value = 1023;
+  const float max_duty = 0.1 * timer_count;
+  const float min_duty = 0.05 * timer_count;
+
+  const float scale_factor = (max_duty - min_duty)/max_adc_value;
+
+  float pwm_counts;
+
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
 
   /* USER CODE END 2 */
 
@@ -95,8 +113,16 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
+	  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_8, GPIO_PIN_RESET);
+	  HAL_SPI_TransmitReceive(&hspi1, tx_data, rx_data, 3, HAL_MAX_DELAY);
+	  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_8, GPIO_PIN_SET);
 
+	  adc_value = (rx_data[1] << 8) | rx_data[2];
+	  pwm_counts = min_duty + adc_value*scale_factor;
+	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, (uint16_t)pwm_counts);
+
+	  HAL_Delay(10);
+    /* USER CODE END WHILE */
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -143,7 +169,6 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
 /* USER CODE END 4 */
 
 /**
