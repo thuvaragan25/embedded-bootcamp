@@ -92,20 +92,20 @@ int main(void)
   MX_SPI1_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-  uint8_t tx_data[3] = {0b00000001, 0b10000000, 0};
-  uint8_t rx_data[3];
+  uint8_t tx_data[3] = {0b00000001, 0b10000000, 0b00000000}; //first byte: start bit, second byte: single ended mode channel 0 (where potentiometer is connected), third byte: don't care bits
+  uint8_t rx_data[3]; //receives 3 bytes
   uint16_t adc_value;
 
-  const uint16_t timer_count = 10000;
-  const uint16_t max_adc_value = 1023;
-  const float max_duty = 0.1 * timer_count;
-  const float min_duty = 0.05 * timer_count;
+  const uint16_t TIMER_COUNT = 64000; //value that was configured in the ioc file
+  const uint16_t MAX_ADC_VALUE = 1023; //since 10-bit ADC
+  const float MAX_DUTY = 0.1 * TIMER_COUNT; //maximum duty should be 10%
+  const float MIN_DUTY = 0.05 * TIMER_COUNT; //minimum duty should be 5%
 
-  const float scale_factor = (max_duty - min_duty)/max_adc_value;
+  const float SCALE_FACTOR = (MAX_DUTY - MIN_DUTY)/MAX_ADC_VALUE; //restricts the ADC value to be minimum 5% and max 10%
 
   float pwm_counts;
 
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1); //starts PWM signal on TIM1, channel 1
 
   /* USER CODE END 2 */
 
@@ -113,16 +113,17 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_8, GPIO_PIN_RESET);
-	  HAL_SPI_TransmitReceive(&hspi1, tx_data, rx_data, 3, HAL_MAX_DELAY);
-	  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_8, GPIO_PIN_SET);
+	  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_8, GPIO_PIN_RESET); //CS Line set to low to initiate communication
+	  HAL_SPI_TransmitReceive(&hspi1, tx_data, rx_data, 3, HAL_MAX_DELAY); //transmits the tx_data and receives the rx_data through SPI
+	  HAL_GPIO_WritePin(GPIOB,GPIO_PIN_8, GPIO_PIN_SET); //CS Line set to high to end communication
 
-	  adc_value = (rx_data[1] << 8) | rx_data[2];
-	  pwm_counts = min_duty + adc_value*scale_factor;
-	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, (uint16_t)pwm_counts);
+	  adc_value = ((rx_data[1] & 0b00000011) << 8) | rx_data[2]; //isolating the 2 bits contained in the second byte with bit masking. Then shifting the two bits to the front using bit shifting. Since ADC has 10 bits, the remaining 8 bits is from the bits contained in the 3rd byte
+	  pwm_counts = MIN_DUTY + adc_value*SCALE_FACTOR;
+	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, (uint16_t)pwm_counts); //converts ADC value to PWM signal
 
-	  HAL_Delay(10);
+	  HAL_Delay(10); //ensures MCU doesn't overload the ADC
     /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
